@@ -11,34 +11,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.8'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install numpy pandas matplotlib seaborn nbformat nbconvert jupyter_client
+        pip install numpy pandas matplotlib seaborn nbformat nbconvert jupyter_client ipykernel jupyter
+
+    - name: Verify installed Jupyter kernels
+      run: |
+        python -m ipykernel install --user --name=python3
+        jupyter kernelspec list
+
+    - name: Run climate data script
+      run: |
+        if [ -f climate_data.py ]; then
+          python climate_data.py
+        else
+          echo "Error: climate_data.py not found!"
+          exit 1
+        fi
 
     - name: Run tests and calculate grade
       run: |
-        # Generate climate data
-        python climate_data.py
-        
-        # Run tests
-        python -m unittest test_climate_eda.py
-        
-        # Extract grade from test output
+        if [ -f test_climate_eda.py ]; then
+          python -m unittest test_climate_eda.py
+        else
+          echo "Error: test_climate_eda.py not found!"
+          exit 1
+        fi
+
+    - name: Extract grade
+      run: |
         GRADE=$(python -c "
         import unittest
         from test_climate_eda import TestClimateEDA
-        test_case = TestClimateEDA()
-        print(test_case.calculate_grade())
-          ")
-          
+        suite = unittest.TestLoader().loadTestsFromTestCase(TestClimateEDA)
+        test_runner = unittest.TextTestRunner()
+        test_runner.run(suite)
+        try:
+            test_case = TestClimateEDA()
+            test_case.setUpClass()
+            print(test_case.calculate_grade())
+        except Exception as e:
+            print('Error calculating grade:', e)
+            print('GRADE=0')
+        ")
         echo "Grade: $GRADE/100"
         echo "GRADE=$GRADE" >> $GITHUB_ENV
 
